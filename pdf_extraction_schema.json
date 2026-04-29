@@ -1,0 +1,129 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "pdf_extraction_schema.json",
+  "title": "Multi-Section PDF Data Extraction Schema",
+  "description": "General-purpose schema for extracting key data points from complex PDFs (25-150 pages). Designed to handle variable document structures with repeating sections, optional subsections, and nested field hierarchies.",
+  "type": "object",
+  "required": ["document_info", "sections"],
+  "properties": {
+
+    "document_info": {
+      "type": "object",
+      "description": "Identifies the source document. All fields required to ensure traceability.",
+      "required": ["document_id", "source_filename", "extracted_at", "total_pages"],
+      "properties": {
+        "document_id":      { "type": "string", "minLength": 1 },
+        "source_filename":  { "type": "string" },
+        "extracted_at":     { "type": "string", "format": "date-time" },
+        "total_pages":      { "type": "integer", "minimum": 1 },
+        "language":         { "type": "string", "default": "en" },
+        "version":          { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+
+    "sections": {
+      "type": "array",
+      "description": "Each element represents one logical section of the source PDF. Sections are repeating and variable — the schema accommodates both structured tables and free-text blocks.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["section_id", "section_title", "page_range", "fields"],
+        "properties": {
+          "section_id":    { "type": "string" },
+          "section_title": { "type": "string" },
+          "page_range": {
+            "type": "object",
+            "required": ["start", "end"],
+            "properties": {
+              "start": { "type": "integer", "minimum": 1 },
+              "end":   { "type": "integer", "minimum": 1 }
+            },
+            "additionalProperties": false
+          },
+
+          "fields": {
+            "type": "array",
+            "description": "Extracted key-value pairs from this section. Each field carries its own type, validation status, and confidence score.",
+            "items": {
+              "type": "object",
+              "required": ["key", "value", "data_type", "required"],
+              "properties": {
+                "key":        { "type": "string" },
+                "value":      {},
+                "data_type":  { "type": "string", "enum": ["string", "number", "boolean", "date", "array", "object", "null"] },
+                "required":   { "type": "boolean" },
+                "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "Extraction confidence score between 0 and 1" },
+                "null_reason":{ "type": ["string", "null"], "description": "If value is null, explains why — missing in source, redacted, or not applicable" }
+              },
+              "if": { "properties": { "required": { "const": true } } },
+              "then": {
+                "properties": { "value": { "not": { "type": "null" } } }
+              },
+              "additionalProperties": false
+            }
+          },
+
+          "subsections": {
+            "type": "array",
+            "description": "Optional nested subsections within a parent section. Supports unlimited depth for deeply structured documents.",
+            "items": { "$ref": "#/properties/sections/items" }
+          },
+
+          "tables": {
+            "type": "array",
+            "description": "Structured tabular data extracted from this section.",
+            "items": {
+              "type": "object",
+              "required": ["headers", "rows"],
+              "properties": {
+                "table_title": { "type": ["string", "null"] },
+                "headers": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "minItems": 1
+                },
+                "rows": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "validation_summary": {
+      "type": "object",
+      "description": "Post-extraction validation report. Tracks required-field coverage and flags any null values that should have been populated.",
+      "properties": {
+        "total_fields_extracted":  { "type": "integer", "minimum": 0 },
+        "required_fields_missing": { "type": "integer", "minimum": 0 },
+        "null_fields":             { "type": "integer", "minimum": 0 },
+        "validation_passed":       { "type": "boolean" },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["field_path", "error_type", "message"],
+            "properties": {
+              "field_path":  { "type": "string" },
+              "error_type":  { "type": "string", "enum": ["missing_required", "type_mismatch", "format_error", "constraint_violation"] },
+              "message":     { "type": "string" }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+
+  },
+  "additionalProperties": false
+}

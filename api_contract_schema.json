@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "api_contract_schema.json",
+  "title": "Structured Data Submission API Contract",
+  "description": "API contract schema defining the expected request payload for submitting extracted document data. Used across FastAPI services to enforce consistent data flow between extraction pipelines and downstream consumers.",
+
+  "definitions": {
+    "field_value": {
+      "description": "Reusable definition for a typed, validated field value used across multiple endpoints.",
+      "type": "object",
+      "required": ["name", "value", "type"],
+      "properties": {
+        "name":       { "type": "string", "minLength": 1 },
+        "value":      {},
+        "type":       { "type": "string", "enum": ["string", "number", "boolean", "date", "array", "object"] },
+        "nullable":   { "type": "boolean", "default": false },
+        "description":{ "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+
+    "address": {
+      "type": "object",
+      "required": ["street", "city", "country"],
+      "properties": {
+        "street":   { "type": "string" },
+        "city":     { "type": "string" },
+        "state":    { "type": ["string", "null"] },
+        "postcode": { "type": ["string", "null"] },
+        "country":  { "type": "string", "minLength": 2, "maxLength": 2, "description": "ISO 3166-1 alpha-2 country code" }
+      },
+      "additionalProperties": false
+    }
+  },
+
+  "type": "object",
+  "required": ["request_id", "submitted_by", "payload"],
+  "properties": {
+
+    "request_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this submission, used for idempotency and tracing."
+    },
+
+    "submitted_by": {
+      "type": "object",
+      "required": ["user_id", "role"],
+      "properties": {
+        "user_id":    { "type": "string" },
+        "role":       { "type": "string", "enum": ["engineer", "reviewer", "admin"] },
+        "team":       { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+
+    "payload": {
+      "type": "object",
+      "description": "The structured data being submitted. Supports multiple document types via discriminated union pattern.",
+      "required": ["document_type", "data"],
+      "properties": {
+        "document_type": {
+          "type": "string",
+          "enum": ["financial_report", "legal_contract", "intake_form", "technical_spec"]
+        },
+        "data": {
+          "description": "Varies by document_type. Validated against the corresponding type-specific schema.",
+          "type": "object"
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["filename", "mime_type", "size_bytes"],
+            "properties": {
+              "filename":    { "type": "string" },
+              "mime_type":   { "type": "string" },
+              "size_bytes":  { "type": "integer", "minimum": 1 },
+              "checksum":    { "type": ["string", "null"] }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "metadata": {
+      "type": "object",
+      "description": "Optional submission-level metadata for auditing and routing.",
+      "properties": {
+        "priority":     { "type": "string", "enum": ["low", "normal", "high"], "default": "normal" },
+        "tags":         { "type": "array", "items": { "type": "string" } },
+        "submitted_at": { "type": "string", "format": "date-time" },
+        "client_ref":   { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+
+  },
+  "additionalProperties": false
+}

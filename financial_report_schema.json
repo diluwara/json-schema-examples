@@ -1,0 +1,103 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "financial_report_schema.json",
+  "title": "Financial Report Extraction Schema",
+  "description": "Schema for extracting structured data from multi-section financial report PDFs. Handles nested summaries, line-item tables, and repeating fiscal period blocks.",
+  "type": "object",
+  "required": ["report_metadata", "fiscal_periods", "totals"],
+  "properties": {
+
+    "report_metadata": {
+      "type": "object",
+      "description": "Top-level document information extracted from the cover page or header.",
+      "required": ["company_name", "report_type", "reporting_currency", "prepared_date"],
+      "properties": {
+        "company_name":        { "type": "string" },
+        "report_type":         { "type": "string", "enum": ["annual", "quarterly", "interim"] },
+        "reporting_currency":  { "type": "string", "pattern": "^[A-Z]{3}$", "description": "ISO 4217 currency code, e.g. USD, EUR" },
+        "prepared_date":       { "type": "string", "format": "date" },
+        "audited":             { "type": "boolean", "default": false }
+      },
+      "additionalProperties": false
+    },
+
+    "fiscal_periods": {
+      "type": "array",
+      "description": "One entry per fiscal period found in the report. Repeating section — each period contains its own income statement, balance sheet summary, and line items.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["period_label", "start_date", "end_date", "income_statement"],
+        "properties": {
+          "period_label":  { "type": "string", "description": "Human-readable label e.g. Q1 2024, FY 2023" },
+          "start_date":    { "type": "string", "format": "date" },
+          "end_date":      { "type": "string", "format": "date" },
+
+          "income_statement": {
+            "type": "object",
+            "required": ["revenue", "net_income"],
+            "properties": {
+              "revenue":              { "type": "number", "minimum": 0 },
+              "cost_of_goods_sold":   { "type": ["number", "null"], "minimum": 0 },
+              "gross_profit":         { "type": ["number", "null"] },
+              "operating_expenses":   { "type": ["number", "null"] },
+              "operating_income":     { "type": ["number", "null"] },
+              "tax_expense":          { "type": ["number", "null"], "minimum": 0 },
+              "net_income":           { "type": "number" }
+            },
+            "additionalProperties": false
+          },
+
+          "line_items": {
+            "type": "array",
+            "description": "Individual expense or revenue line items listed in the report body.",
+            "items": {
+              "type": "object",
+              "required": ["label", "amount"],
+              "properties": {
+                "label":    { "type": "string" },
+                "amount":   { "type": "number" },
+                "category": { "type": "string", "enum": ["revenue", "expense", "asset", "liability", "equity"] },
+                "note":     { "type": ["string", "null"] }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "totals": {
+      "type": "object",
+      "description": "Aggregate figures summed across all fiscal periods. Sum constraint: total_revenue must equal sum of fiscal_periods[*].income_statement.revenue.",
+      "required": ["total_revenue", "total_net_income"],
+      "properties": {
+        "total_revenue":    { "type": "number", "minimum": 0 },
+        "total_net_income": { "type": "number" },
+        "total_tax_paid":   { "type": ["number", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+
+    "notes": {
+      "type": "array",
+      "description": "Optional footnotes or auditor remarks extracted from the notes section of the PDF.",
+      "items": {
+        "type": "object",
+        "required": ["note_number", "content"],
+        "properties": {
+          "note_number": { "type": "integer", "minimum": 1 },
+          "content":     { "type": "string" },
+          "references":  {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+
+  },
+  "additionalProperties": false
+}
